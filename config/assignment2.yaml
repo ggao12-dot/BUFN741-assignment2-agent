@@ -1,0 +1,55 @@
+project:
+  name: BUFN741_Assignment2
+  random_seed: 741
+assets:
+  tickers: [SPY, EFA, EEM, TLT, AGG, GLD, USO, DBC]
+data:
+  provider: yahoo
+  price_field: Adj Close
+  frequency: monthly
+  start_date: '1990-01-01'
+  end_month: '2026-08'
+  cache: true
+  offline: false
+  common_sample: true
+  raw_dir: data/raw
+samples:
+  full: {start: common, end: '2026-08'}
+  pre_covid: {start: common, end: '2019-12'}
+  post_covid: {start: '2020-01', end: '2026-08'}
+risk_free:
+  annual_rate: 0.045
+  monthly_conversion: simple
+sim:
+  market: SPY
+  annual_market_risk_premium: 0.06
+  annual_fixed_risk_free_rate: 0.045
+  expected_return_method: alpha_beta_premium
+  allow_trailing_rf_lag: true
+  max_trailing_rf_lag_months: 2
+constraints:
+  A: {type: unrestricted}
+  B: {type: long_only}
+  C: {type: bounded, lower: -0.20, upper: 0.20}
+frontier:
+  points: 200
+  target_range_padding: 0.25
+subsample_analysis:
+  constraint: B
+diversification:
+  constraint: B
+optimization:
+  constraint_tolerance: 1.0e-7
+  psd_tolerance: 1.0e-10
+  solver: CLARABEL
+  tangency_solver: SLSQP
+  crosscheck_weight_tolerance: 2.0e-4
+  frontier_sharpe_tolerance: 0.005
+  tangency_existence_tolerance: 1.0e-12
+  dominance_sd_tolerance: 1.0e-8
+outputs:
+  root: runs
+  save_csv: true
+  save_json: true
+  save_figures: true
+  dpi: 200
