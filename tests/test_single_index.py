@@ -17,6 +17,9 @@ def test_sim_identities_and_regressions(returns):
     np.testing.assert_allclose(result.covariance[off], systematic[off], rtol=0, atol=1e-16)
     np.testing.assert_allclose(np.diag(result.covariance), beta ** 2 * result.market_variance + result.regressions.residual_variance_monthly,
                                rtol=0, atol=1e-16)
+    np.testing.assert_allclose(
+        result.regressions.systematic_variance_share,
+        result.regressions.systematic_variance_monthly / result.regressions.total_variance_monthly)
     np.testing.assert_allclose(result.covariance, result.covariance.T, atol=1e-16)
     assert np.linalg.eigvalsh(result.covariance).min() >= 0
     np.testing.assert_allclose(result.means, .045 / 12 + result.regressions.alpha_monthly + beta * .06 / 12)

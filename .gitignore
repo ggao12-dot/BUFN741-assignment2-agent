@@ -1,4 +1,15 @@
 .venv/
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*~
+.coverage
+htmlcov/
+.~lock.*
 __pycache__/
 .pytest_cache/
 *.pyc

@@ -4,6 +4,18 @@ Deterministic Markowitz and Single-Index Model portfolio analysis for SPY, EFA,
 EEM, TLT, AGG, GLD, USO and DBC. Python 3.10+; Linux/macOS (run locking uses
 `fcntl`). No LLM API or credentials are required.
 
+## Canonical Assignment 2 Results
+
+This project evaluates the eight-ETF universe with Markowitz and Single-Index
+Model portfolio analysis under unrestricted, long-only, and ±20% weight
+constraints. The canonical production run is
+`20260921T172426819558Z_2ebe0baf`. Its [complete report](deliverables/canonical/final_assignment_report.md),
+[PDF](deliverables/canonical/final_assignment_report.pdf), and
+[editable DOCX](deliverables/canonical/final_assignment_report.docx) are under
+`deliverables/canonical/`. Detailed provenance, sample metadata, validation
+results, and checksums are recorded in the
+[production manifest](deliverables/canonical/production_manifest.json).
+
 ## Install and run
 
 ```bash
@@ -48,6 +60,17 @@ ID and matching configuration (offline mode may change). It archives the previou
 attempt under `attempts/NNN/` and replays every stage. This conservative resume
 policy avoids mixing outputs across attempts; it does not skip completed work.
 An OS lock prevents concurrent execution against the same run ID.
+
+After the complete test suite and a successful analytical run, frozen DOCX/PDF
+deliverables can be generated once with:
+
+```bash
+python -m workflow.production --run runs/RUN_ID --pytest-result "81 passed in 116.59s"
+```
+
+This creates `runs/RUN_ID/production/` with the packaged Markdown, editable DOCX,
+PDF, checksum manifest and `FINALIZED` marker. The command refuses to overwrite a
+finalized package; regeneration requires a new run or explicit production version.
 
 ## Data and sample conventions
 
@@ -212,6 +235,9 @@ runs/<run_id>/
   results_summary.json     machine-readable metrics, assumptions and sample metadata
   interpretation.md        deterministic quantitative narrative
   markowitz_report.md      available Markowitz results, explicitly scoped/partial
+  sim_report.md            SIM estimation, diagnostics and A/B/C portfolios when SIM succeeds
+  model_comparison_report.md  covariance-only and complete-model comparisons
+  final_assignment_report.md  consolidated assignment narrative with figures
 ```
 
 The stages are configuration, Yahoo data, input validation, Markowitz full sample,
@@ -224,6 +250,14 @@ weights, labels, order and metrics against accepted in-memory results, including
 benchmarks and comparison tables. It independently recomputes portfolio metrics,
 feasibility and full CAL identities, checks nonattained tangency metadata, and
 reconciles the summary JSON before accepting figures or reports. Successful
+SIM runs also reconcile the saved regressions, residuals and assumptions, then
+render and validate `sim_report.md` from those persisted authoritative artifacts.
+Complete multi-model runs similarly render and validate
+`model_comparison_report.md` from the saved common-target, metric, weight and
+moment outputs. After figures and component reports exist, the terminal report
+stage assembles and validates `final_assignment_report.md`, including required
+sections, sample metadata, eight assignment answers and every referenced figure.
+These reports must pass their gates before the run can complete. Successful
 numerical artifacts have a SHA-256 manifest.
 Environment/package versions and source hashes are recorded for reproducibility.
 CSV/JSON are mandatory audit outputs; figures may be disabled.

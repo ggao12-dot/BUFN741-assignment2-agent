@@ -14,7 +14,10 @@ from src.data_download import load_yahoo_prices, load_fama_french, sha256
 from src.diagnostics import largest_pairs, result_diagnostics, sample_changes, weight_stability
 from src.estimate_moments import estimate_moments, monthly_rate, portfolio_metrics
 from src.generate_tables import save_result, write_json, json_safe
-from src.interpretation import write_interpretation, write_markowitz_report
+from src.final_report import write_final_assignment_report, validate_final_assignment_report
+from src.interpretation import (validate_model_comparison_report, validate_sim_report,
+                                write_interpretation, write_markowitz_report,
+                                write_model_comparison_report, write_sim_report)
 from src.markowitz import run_markowitz
 from src.portfolio_optimizer import ConstraintSpec, analyze
 from src.process_returns import monthly_returns
@@ -24,6 +27,18 @@ from src.validation import require, validate_weights, validate_covariance, Valid
 from workflow.state_manager import RunState
 
 LOG = logging.getLogger(__name__)
+
+
+def git_commit(project_root: Path) -> str | None:
+    """Read the current commit without invoking Git; return None for an unborn repository."""
+    head = project_root / '.git' / 'HEAD'
+    if not head.is_file():
+        return None
+    value = head.read_text().strip()
+    if value.startswith('ref: '):
+        ref = project_root / '.git' / value[5:]
+        return ref.read_text().strip() if ref.is_file() else None
+    return value or None
 
 
 def validate_config(config: dict) -> None:
@@ -76,6 +91,41 @@ def reconcile_table(path: Path, expected: pd.DataFrame) -> pd.DataFrame:
 def reconcile_json(path: Path, expected: dict) -> None:
     require(json.loads(path.read_text()) == json_safe(expected),
             f'{path.name}: persisted JSON differs from authoritative result')
+
+
+def validate_saved_sim(root: Path, sim) -> None:
+    """Reconcile every persisted input consumed by the SIM-only report."""
+    regressions = pd.read_csv(root / 'models' / 'sim_regressions.csv', index_col='asset',
+                              float_precision='round_trip')
+    try:
+        pd.testing.assert_frame_equal(regressions, sim.regressions, check_dtype=False,
+                                      check_exact=False, atol=1e-12, rtol=1e-12)
+    except AssertionError as exc:
+        raise ValidationError(f'sim_regressions.csv differs from authoritative SIM result: {exc}') from exc
+    residuals = pd.read_csv(root / 'models' / 'sim_residuals.csv', index_col=0,
+                            float_precision='round_trip')
+    require(residuals.columns.tolist() == sim.residuals.columns.tolist() and
+            residuals.index.tolist() == sim.residuals.index.astype(str).tolist() and
+            np.allclose(residuals.to_numpy(), sim.residuals.to_numpy(), atol=1e-12, rtol=1e-12),
+            'sim_residuals.csv differs from authoritative SIM result')
+    reconcile_json(root / 'models' / 'sim_assumptions.json', sim.assumptions)
+
+
+def validate_saved_descriptive_diagnostics(root: Path, samples: dict, changes: dict,
+                                           stability: pd.DataFrame) -> None:
+    """Reconcile persisted descriptive inputs cited by the final report."""
+    full_correlation = pd.read_csv(root / 'models' / 'full_sample_correlation.csv', index_col=0,
+                                   float_precision='round_trip')
+    try:
+        pd.testing.assert_frame_equal(full_correlation, samples['full'].corr(), check_dtype=False,
+                                      check_names=False, check_exact=False, atol=1e-12, rtol=1e-12)
+    except AssertionError as exc:
+        raise ValidationError(f'full_sample_correlation.csv differs from authoritative sample: {exc}') from exc
+    reconcile_table(root / 'diagnostics' / 'full_correlations.csv',
+                    largest_pairs(samples['full'].corr(), 'correlation', 28))
+    for name in ['covariance_changes', 'correlation_changes', 'variance_changes']:
+        reconcile_table(root / 'diagnostics' / f'{name}.csv', changes[name])
+    reconcile_table(root / 'diagnostics' / 'pre_post_weight_stability.csv', stability)
 
 
 def validate_saved_results(root: Path, results: dict, specifications: dict, config: dict, rf: float,
@@ -170,6 +220,7 @@ def run_assignment(config: dict, project_root: Path, resume: str | None = None) 
             rf = monthly_rate(config['risk_free']['annual_rate'], config['risk_free']['monthly_conversion'])
             specs = {k: ConstraintSpec.from_config(v) for k, v in config['constraints'].items()}
             provenance = dict(python=platform.python_version(), platform=platform.platform(),
+                              git_commit=git_commit(project_root),
                               packages={p: importlib.metadata.version(p) for p in [
                                   'numpy', 'pandas', 'scipy', 'cvxpy', 'clarabel', 'statsmodels',
                                   'yfinance', 'matplotlib', 'pandas_market_calendars']},
@@ -360,9 +411,17 @@ def run_assignment(config: dict, project_root: Path, resume: str | None = None) 
             write_json(root / 'results_summary.json', summary)
         with state.stage('output_validation'):
             validate_saved_results(root, results, result_specs, config, rf, benchmark_tables, summary, extra_tables)
+            validate_saved_descriptive_diagnostics(root, samples, changes, stability)
+            if sim_ready:
+                validate_saved_sim(root, sim)
             for label in specs if sim_ready else []:
                 table = pd.read_csv(root / 'tables' / f'comparison_covariance_only_{label}_means.csv', float_precision='round_trip')
                 require(np.array_equal(table.markowitz.to_numpy(), table.sim.to_numpy()), 'Saved covariance-only means differ')
+            if sim_ready:
+                write_sim_report(root)
+                validate_sim_report(root)
+                write_model_comparison_report(root)
+                validate_model_comparison_report(root)
             manifest = {str(p.relative_to(root)): sha256(p) for folder in ['data', 'models', 'tables', 'diagnostics']
                         for p in sorted((root / folder).rglob('*')) if p.is_file()}
             write_json(root / 'diagnostics' / 'artifact_manifest.json', manifest)
@@ -411,6 +470,8 @@ def run_assignment(config: dict, project_root: Path, resume: str | None = None) 
         if sim_ready:
             with state.stage('report'):
                 write_interpretation(root, summary)
+                write_final_assignment_report(root)
+                validate_final_assignment_report(root)
         state.complete()
         LOG.info('Run %s: %s', state.state['status'], root)
         return root

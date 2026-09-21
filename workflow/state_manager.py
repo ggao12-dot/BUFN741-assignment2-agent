@@ -53,7 +53,9 @@ class RunState:
                 archive = self.path / 'attempts' / f"{previous['attempt']:03d}"
                 archive.mkdir(parents=True, exist_ok=False)
                 for name in DIRECTORIES + ['state.json', 'results_summary.json', 'interpretation.md',
-                                            'markowitz_report.md', 'config_snapshot.yaml']:
+                                            'markowitz_report.md', 'sim_report.md',
+                                            'model_comparison_report.md', 'final_assignment_report.md',
+                                            'config_snapshot.yaml']:
                     source = self.path / name
                     if source.exists():
                         shutil.move(str(source), str(archive / name))

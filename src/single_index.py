@@ -53,6 +53,8 @@ def fit_single_index(returns: pd.DataFrame, rf: pd.Series, config: dict) -> Sing
         row['residual_sd_monthly'] = np.sqrt(row['residual_variance_monthly'])
         row['systematic_variance_monthly'] = row['beta'] ** 2 * market_variance
         row['total_variance_monthly'] = row['systematic_variance_monthly'] + row['residual_variance_monthly']
+        row['systematic_variance_share'] = (
+            row['systematic_variance_monthly'] / row['total_variance_monthly'])
         row['alpha_annual'] = 12 * row['alpha_monthly']
         row['residual_variance_annual'] = 12 * row['residual_variance_monthly']
         row['residual_sd_annual'] = np.sqrt(12) * row['residual_sd_monthly']
